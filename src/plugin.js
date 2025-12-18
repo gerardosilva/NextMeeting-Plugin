@@ -1,7 +1,7 @@
 /* global WebSocket, Buffer */
 // Stream Deck Next Meeting plugin runtime.
 (() => {
-  const UPDATE_INTERVAL_MS = 15000;
+  const UPDATE_INTERVAL_MS = 10000;
   const SOON_THRESHOLD_MIN = 15;
   const NOW_THRESHOLD_MIN = 1;
 
@@ -16,15 +16,7 @@
     live: '#D32F2F'
   };
 
-  function log(...args) {
-    console.log('[next-meeting]', ...args);
-    try {
-      const text = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-      websocket && websocket.send(JSON.stringify({ event: 'logMessage', payload: { message: `[next-meeting] ${text}` } }));
-    } catch (_) {
-      // ignore logging errors
-    }
-  }
+  function log() {}
 
   function connectElgatoStreamDeckSocket(inPort, inPluginUUID, inRegisterEvent, inInfo) {
     pluginUUID = inPluginUUID;
@@ -59,7 +51,6 @@
 
   function handleWillAppear(context, payload) {
     const settings = payload.settings || {};
-    log('willAppear', context, { hasTokens: !!settings.googleTokens, calendars: settings.calendars });
     const instance = {
       context,
       settings,
@@ -102,16 +93,13 @@
       const meeting = await getNextMeeting(instance);
       instance.cachedMeeting = meeting;
       render(instance, meeting);
-      if (force) log('Rendered update for', instance.context, meeting);
     } catch (err) {
-      log('Render error', err);
       renderError(instance, err);
     }
   }
 
   async function getNextMeeting(instance) {
     const { settings } = instance;
-    log('getNextMeeting settings', { hasTokens: !!settings.googleTokens, calendars: settings.calendars });
     if (settings.googleTokens && settings.googleTokens.access_token) {
       try {
         if (!settings.googleTokens.email) {
@@ -126,8 +114,7 @@
         log('fetchGoogleNext result', meeting);
         if (meeting) return meeting;
       } catch (err) {
-        log('Google fetch failed', err);
-      }
+        }
     }
     return {
       title: 'No meetings',
@@ -140,22 +127,7 @@
   }
 
   async function refreshGoogleToken(tokens) {
-    const body = new URLSearchParams({
-      client_id: tokens.client_id,
-      refresh_token: tokens.refresh_token,
-      grant_type: 'refresh_token'
-    }).toString();
-    const data = await httpJson('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body
-    });
-    const now = Math.floor(Date.now() / 1000);
-    return {
-      ...tokens,
-      access_token: data.access_token,
-      expires_at: now + (data.expires_in || 0)
-    };
+    throw new Error('refresh requires re-auth');
   }
 
   async function fetchGoogleNext(instance) {
@@ -169,11 +141,9 @@
       instance.settings.googleTokens = tokens;
     }
     const calendars = settings.calendars && settings.calendars.length ? settings.calendars : ['primary'];
-    log('calendars to query', calendars);
     const meetings = [];
     for (const cal of calendars) {
       const evt = await fetchGoogleCalendar(cal, tokens.access_token);
-      log('calendar response', cal, !!evt);
       if (evt) meetings.push(evt);
     }
     if (!meetings.length) return null;
