@@ -1,0 +1,44 @@
+{
+  "Author": "Gerardo",
+  "UUID": "com.elgato.nextmeeting",
+  "Description": "Shows your next calendar meeting with one-tap join and live countdown.",
+  "Name": "Next Meeting",
+  "Icon": "assets/icon",
+  "URL": "https://elgato.com",
+  "Version": "0.1.0",
+  "CodePath": "src/plugin.html",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.4"
+  },
+  "Actions": [
+    {
+      "Name": "Next Meeting",
+      "Icon": "assets/actionIcon",
+      "States": [
+        {
+          "Image": "assets/actionIcon",
+          "TitleAlignment": "middle",
+          "FontSize": 16,
+          "TitleColor": "#FFFFFF"
+        }
+      ],
+      "Tooltip": "Show next meeting and tap to join",
+      "UUID": "com.elgato.nextmeeting.action",
+      "PropertyInspectorPath": "src/property_inspector.html",
+      "SupportedInMultiActions": true
+    }
+  ],
+  "Category": "Next Meeting",
+  "CategoryIcon": "assets/icon",
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "10.15"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ]
+}
