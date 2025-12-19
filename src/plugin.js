@@ -127,20 +127,24 @@
   }
 
   async function refreshGoogleToken(tokens) {
-    throw new Error('refresh requires re-auth');
+    throw new Error('reauth');
   }
 
   async function fetchGoogleNext(instance) {
-    let tokens = instance.settings.googleTokens;
-    const settings = instance.settings;
-    if (!tokens) return null;
+
     const now = Math.floor(Date.now() / 1000);
     if (tokens.expires_at && tokens.expires_at < now + 60 && tokens.refresh_token && tokens.client_id) {
-      tokens = await refreshGoogleToken(tokens);
-      saveSettings(instance.context, { ...settings, googleTokens: tokens });
-      instance.settings.googleTokens = tokens;
+      try {
+        tokens = await refreshGoogleToken(tokens);
+        saveSettings(instance.context, { ...settings, googleTokens: tokens });
+        instance.settings.googleTokens = tokens;
+      } catch (err) {
+        instance.settings.googleTokens = null;
+        saveSettings(instance.context, { ...settings, googleTokens: null });
+        return null;
+      }
     }
-    const calendars = settings.calendars && settings.calendars.length ? settings.calendars : ['primary'];
+const calendars = settings.calendars && settings.calendars.length ? settings.calendars : ['primary'];
     const meetings = [];
     for (const cal of calendars) {
       const evt = await fetchGoogleCalendar(cal, tokens.access_token);
