@@ -63,10 +63,13 @@
     startUpdating(instance);
   }
 
-  function handleKeyUp(context) {
+  async function handleKeyUp(context) {
     const instance = instances.get(context);
-    if (!instance || !instance.cachedMeeting || !instance.cachedMeeting.joinUrl) return;
-    sendToStreamDeck({ event: 'openUrl', payload: { url: instance.cachedMeeting.joinUrl } }, context);
+    if (!instance) return;
+    const meeting = await fetchAndRender(instance, true);
+    if (meeting && meeting.joinUrl) {
+      sendToStreamDeck({ event: 'openUrl', payload: { url: meeting.joinUrl } }, context);
+    }
   }
 
   function handleSendToPlugin(context, payload) {
@@ -94,8 +97,10 @@
       const meeting = await getNextMeeting(instance);
       instance.cachedMeeting = meeting;
       render(instance, meeting);
+      return meeting;
     } catch (err) {
       renderError(instance, err);
+      return null;
     }
   }
 
