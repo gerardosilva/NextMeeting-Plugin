@@ -4,6 +4,7 @@
   const UPDATE_INTERVAL_MS = 10000;
   const SOON_THRESHOLD_MIN = 15;
   const NOW_THRESHOLD_MIN = 1;
+  const VERCEL_OAUTH_BASE = 'https://next-meeting.yaik.us';
 
   let websocket = null;
   let pluginUUID = null;
@@ -101,6 +102,10 @@
   async function getNextMeeting(instance) {
     const { settings } = instance;
     if (settings.googleTokens && settings.googleTokens.access_token) {
+      if (tokenExpired(settings.googleTokens)) {
+        const refreshed = await refreshIfPossible(instance);
+        if (!refreshed) return handleExpiredToken(instance);
+      }
       try {
         if (!settings.googleTokens.email) {
           const updated = await ensureGoogleEmail(instance, settings.googleTokens);
@@ -110,14 +115,22 @@
             log('email filled', updated.email);
           }
         }
-        const meeting = await fetchGoogleNext(instance);
+        const meeting = await fetchGoogleNext(instance, settings.googleTokens);
         log('fetchGoogleNext result', meeting);
         if (meeting) return meeting;
       } catch (err) {
+        if (err?.message === 'unauthorized') {
+          const refreshed = await refreshIfPossible(instance);
+          if (refreshed) {
+            const meeting = await fetchGoogleNext(instance, refreshed);
+            if (meeting) return meeting;
+          }
+          return handleExpiredToken(instance);
         }
+      }
     }
     return {
-      title: 'No meetings',
+      title: 'No Events',
       provider: 'Google',
       start: null,
       end: null,
@@ -127,24 +140,28 @@
   }
 
   async function refreshGoogleToken(tokens) {
-    throw new Error('reauth');
+    if (!VERCEL_OAUTH_BASE) throw new Error('no-refresh-endpoint');
+    const res = await fetch(`${VERCEL_OAUTH_BASE}/api/google/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: tokens.refresh_token })
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`refresh_failed_${res.status}:${text}`);
+    }
+    const data = await res.json();
+    return {
+      ...tokens,
+      access_token: data.access_token,
+      expires_at: data.expires_at,
+      scope: data.scope || tokens.scope
+    };
   }
 
-  async function fetchGoogleNext(instance) {
-
-    const now = Math.floor(Date.now() / 1000);
-    if (tokens.expires_at && tokens.expires_at < now + 60 && tokens.refresh_token && tokens.client_id) {
-      try {
-        tokens = await refreshGoogleToken(tokens);
-        saveSettings(instance.context, { ...settings, googleTokens: tokens });
-        instance.settings.googleTokens = tokens;
-      } catch (err) {
-        instance.settings.googleTokens = null;
-        saveSettings(instance.context, { ...settings, googleTokens: null });
-        return null;
-      }
-    }
-const calendars = settings.calendars && settings.calendars.length ? settings.calendars : ['primary'];
+  async function fetchGoogleNext(instance, tokens) {
+    const settings = instance.settings || {};
+    const calendars = settings.calendars && settings.calendars.length ? settings.calendars : ['primary'];
     const meetings = [];
     for (const cal of calendars) {
       const evt = await fetchGoogleCalendar(cal, tokens.access_token);
@@ -154,6 +171,20 @@ const calendars = settings.calendars && settings.calendars.length ? settings.cal
     const next = pickEarliest(meetings);
     next.provider = 'Google';
     return next;
+  }
+
+  async function refreshIfPossible(instance) {
+    const settings = instance.settings || {};
+    const tokens = settings.googleTokens;
+    if (!tokens || !tokens.refresh_token) return null;
+    try {
+      const updated = await refreshGoogleToken(tokens);
+      instance.settings.googleTokens = updated;
+      saveSettings(instance.context, { ...settings, googleTokens: updated });
+      return updated;
+    } catch (_) {
+      return null;
+    }
   }
 
   async function ensureGoogleEmail(instance, tokens) {
@@ -172,6 +203,27 @@ const calendars = settings.calendars && settings.calendars.length ? settings.cal
     return null;
   }
 
+  function tokenExpired(tokens) {
+    if (!tokens || !tokens.expires_at) return false;
+    const now = Math.floor(Date.now() / 1000);
+    return tokens.expires_at < now + 30;
+  }
+
+  function handleExpiredToken(instance) {
+    const settings = instance.settings || {};
+    instance.settings.googleTokens = null;
+    saveSettings(instance.context, { ...settings, googleTokens: null });
+    return {
+      title: 'Reconnect',
+      provider: 'Google',
+      start: null,
+      end: null,
+      joinUrl: null,
+      status: 'live',
+      subtitleOverride: 'Auth expired'
+    };
+  }
+
   async function fetchGoogleCalendar(calendarId, accessToken) {
     const params = new URLSearchParams({
       orderBy: 'startTime',
@@ -185,6 +237,7 @@ const calendars = settings.calendars && settings.calendars.length ? settings.cal
         headers: { Authorization: `Bearer ${accessToken}` }
       });
     } catch (err) {
+      if (err?.message === 'unauthorized') throw err;
       log('fetchGoogleCalendar error', calendarId, err?.message || err);
       return null;
     }
@@ -297,6 +350,9 @@ const calendars = settings.calendars && settings.calendars.length ? settings.cal
   }
 
   function buildLines(meeting) {
+    if (meeting.subtitleOverride) {
+      return { title: meeting.title || 'Reconnect', subtitle: meeting.subtitleOverride };
+    }
     if (!meeting.start) {
       return { title: 'No Events', subtitle: 'All clear' };
     }
