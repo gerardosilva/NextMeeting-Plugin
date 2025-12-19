@@ -14,7 +14,8 @@
     free: '#263238',
     upcoming: '#1976D2',
     imminent: '#FBC02D',
-    live: '#D32F2F'
+    live: '#D32F2F',
+    error: '#B71C1C'
   };
 
   function log() {}
@@ -168,9 +169,18 @@
     const settings = instance.settings || {};
     const calendars = settings.calendars && settings.calendars.length ? settings.calendars : ['primary'];
     const meetings = [];
+    let hadError = false;
     for (const cal of calendars) {
-      const evt = await fetchGoogleCalendar(cal, tokens.access_token);
-      if (evt) meetings.push(evt);
+      try {
+        const evt = await fetchGoogleCalendar(cal, tokens.access_token);
+        if (evt) meetings.push(evt);
+      } catch (err) {
+        if (err?.message === 'unauthorized') throw err;
+        hadError = true;
+      }
+    }
+    if (!meetings.length && hadError) {
+      throw new Error('connection');
     }
     if (!meetings.length) return null;
     const next = pickEarliest(meetings);
@@ -244,7 +254,7 @@
     } catch (err) {
       if (err?.message === 'unauthorized') throw err;
       log('fetchGoogleCalendar error', calendarId, err?.message || err);
-      return null;
+      throw err;
     }
     if (!data.items || !data.items.length) return null;
     const ev = data.items[0];
@@ -347,9 +357,10 @@
   }
 
   function renderError(instance, err) {
-    const title = 'Error';
-    const subtitle = err?.message ? err.message.slice(0, 24) : 'Check auth';
-    const svg = buildSvgTile(title, subtitle, 'live', 'Google', false);
+    const msg = err?.message || '';
+    const title = msg === 'connection' ? 'Offline' : 'Error';
+    const subtitle = msg === 'connection' ? 'Check network' : (msg ? msg.slice(0, 24) : 'Check auth');
+    const svg = buildSvgTile(title, subtitle, 'error', 'Google', false);
     setImage(instance.context, svg);
     setTitle(instance.context, `${title}\\n${subtitle}`);
   }
@@ -390,10 +401,12 @@
 
   function buildSvgTile(title, subtitle, status, provider, hasLink) {
     const bg = statusColors[status] || statusColors.free;
-    const providerLabel = '📅';
+    const providerLabel = status === 'error' ? '!' : '📅';
+    const iconBg = status === 'error' ? `<circle cx='20' cy='22' r='12' fill='#FFFFFF' opacity='0.2'/>` : '';
     const badge = ''; // only calendar icon
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='144' height='144'>` +
       `<rect width='144' height='144' rx='16' ry='16' fill='${bg}'/>` +
+      `${iconBg}` +
       `<text x='12' y='32' font-family='Arial, sans-serif' font-size='18' fill='#FFFFFF' opacity='0.9'>${providerLabel}</text>` +
       `<text x='12' y='72' font-family='Arial, sans-serif' font-size='20' fill='#FFFFFF'>${escapeSvg(title)}</text>` +
       `<text x='12' y='104' font-family='Arial, sans-serif' font-size='18' fill='#FFFFFF' opacity='0.9'>${escapeSvg(subtitle)}</text>` +
