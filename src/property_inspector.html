@@ -5,29 +5,65 @@
   <title>Next Meeting</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 12px; background: #0f1115; color: #e5e5e5; }
-    h2 { margin-top: 0; }
+    h2 { margin-top: 0; margin-bottom: 12px; }
+    h3 { margin: 0 0 4px; font-size: 14px; }
     label { display: block; margin: 8px 0 4px; font-weight: 600; }
-    input, select, textarea { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid #2c313a; background: #15171d; color: #e5e5e5; }
-    textarea { min-height: 70px; }
-    .row { display: flex; gap: 8px; }
-    .row > div { flex: 1; }
-    .switch { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    input, textarea { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid #2c313a; background: #15171d; color: #e5e5e5; box-sizing: border-box; }
+    textarea { min-height: 70px; resize: vertical; }
     button { margin-top: 10px; padding: 8px 10px; border: none; border-radius: 6px; background: #1e88e5; color: #fff; cursor: pointer; }
-    small { color: #9ea3ab; }
+    button.secondary { background: #455a64; }
+    button.danger { background: #a93226; }
+    .grid { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+    .panel { border: 1px solid #2c313a; border-radius: 10px; padding: 10px; margin-top: 12px; background: rgba(255,255,255,0.02); }
+    .actions { display: flex; gap: 8px; }
+    .meta { color: #9ea3ab; font-size: 12px; margin-top: 2px; }
+    .account-card { border: 1px solid #2c313a; border-radius: 10px; padding: 10px; margin-top: 10px; }
+    .account-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+    .account-head > div:first-child { min-width: 0; flex: 1 1 160px; }
+    .account-head strong { display: block; overflow-wrap: anywhere; }
+    .account-actions { display: flex; gap: 6px; flex: 0 1 100%; justify-content: flex-end; flex-wrap: wrap; }
+    .account-actions button { margin-top: 0; flex: 0 0 auto; }
+    .inline-toggle { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-weight: 500; }
+    .inline-toggle input { width: auto; }
+    .empty { color: #9ea3ab; padding: 12px 0 4px; }
+    small { color: #9ea3ab; display: block; margin-top: 4px; }
   </style>
 </head>
 <body>
   <h2>Next Meeting</h2>
 
-  <div>
-    <button id="connect-google">Connect Google Calendar</button>
-    <button id="connect-outlook" disabled title="Outlook integration coming soon">Connect Outlook Calendar (coming soon)</button>
-    <div id="auth-status" style="margin-top:6px;"></div>
+  <div class="panel">
+    <label for="oauth-base">OAuth Base URL</label>
+    <input id="oauth-base" placeholder="https://next-meeting.example.com">
+
+    <div class="grid">
+      <div>
+        <label for="google-client-id">Google Client ID</label>
+        <input id="google-client-id" placeholder="...apps.googleusercontent.com">
+      </div>
+      <div>
+        <label for="microsoft-client-id">Microsoft Client ID</label>
+        <input id="microsoft-client-id" placeholder="00000000-0000-0000-0000-000000000000">
+      </div>
+    </div>
+
+    <label for="microsoft-tenant">Microsoft Tenant</label>
+    <input id="microsoft-tenant" placeholder="common">
+    <small>Use <code>common</code> unless you need a specific Entra tenant.</small>
   </div>
 
+  <div class="actions">
+    <button id="connect-google">Connect Google</button>
+    <button id="connect-outlook" class="secondary">Connect Outlook</button>
+  </div>
 
-  <label for="calendars">Calendars (comma separated IDs)</label>
-  <textarea id="calendars" placeholder="primary, team@group.calendar.google.com"></textarea>
+  <div id="auth-status" class="meta" style="margin-top:8px;"></div>
+
+  <div class="panel">
+    <h3>Accounts</h3>
+    <small>Each account can point to different calendars. The plugin picks the earliest upcoming meeting across all enabled accounts.</small>
+    <div id="accounts"></div>
+  </div>
 
   <button id="refresh">Refresh now</button>
 

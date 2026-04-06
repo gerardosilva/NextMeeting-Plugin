@@ -5,7 +5,7 @@
   "Name": "Next Meeting",
   "Icon": "assets/icon",
   "URL": "https://elgato.com",
-  "Version": "0.1.1",
+	"Version": "0.2.0",
   "CodePath": "src/plugin.html",
   "SDKVersion": 2,
   "Software": {

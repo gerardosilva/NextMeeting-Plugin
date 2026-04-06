@@ -1,34 +1,38 @@
-## Stream Deck Next Meeting Plugin Template
+## Stream Deck Next Meeting Plugin
 
-Shows your next Google Calendar event and lets you join with one press. Uses OAuth PKCE with a separate backend for token exchange and refresh.
+This Stream Deck plugin shows your next calendar event and lets you join it with one tap. The current implementation supports multiple Google and Outlook accounts, with OAuth token refresh through a small Vercel backend.
 
 ### What’s included
 - Stream Deck plugin manifest with one `next.meeting` action.
-- Plugin runtime (`src/plugin.js`) that handles updates, status display, and click-to-refresh.
-- Property Inspector UI (`src/property_inspector.html` + `src/property-inspector.js`) with Google connect.
+- Plugin runtime (`src/plugin.js`) that handles connection, settings, throttled updates, and state display.
+- Property Inspector UI (`src/property_inspector.html` + `src/property-inspector.js`) to pick provider, account, calendars, and mock data for local testing.
 - Minimal theming assets in `assets/`.
+- Implementation guide for OAuth 2.0, Google Calendar, and Microsoft Graph.
 
-### Behavior
-- Auto-updates every 10s.
-- Tap the key to force refresh (and open the meeting link if available).
-- Shows a red error state with an `!` icon when there is a connection failure.
-- Shows a red "Reconnect / Auth expired" state when OAuth tokens are invalid.
+### Quick start
+1. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` locally or in your Vercel project.
+2. Deploy the `api/google/*` endpoints, or run the local companion from `oauth/google-companion.js`.
+3. Place this folder as `com.elgato.nextmeeting.sdPlugin` in the Stream Deck plugins directory or package it with Elgato's Distribution Tool.
+4. Use `Reload Plugins` in Stream Deck to pick up changes.
 
-### OAuth flow
-This plugin expects a separate OAuth backend to exchange the auth code and refresh tokens:
-- `/api/google/callback` exchanges the code for tokens.
-- `/api/google/refresh` refreshes access tokens using the `refresh_token`.
+### OAuth and providers
+- **OAuth**: The property inspector uses OAuth 2.0 PKCE. Client secrets stay server-side in the Vercel callbacks.
+- **Google refresh**: `POST /api/google/refresh` refreshes expired access tokens. If Google does not reissue a `refresh_token`, the previous one is preserved.
+- **Microsoft refresh**: `POST /api/microsoft/refresh` refreshes Microsoft Graph tokens for Outlook accounts.
+- **Reconnect behavior**: Transient refresh/network failures keep the saved accounts. The plugin only asks to reconnect when the provider rejects the refresh token.
+- **Google Calendar**: Uses Calendar v3 `events.list` with `orderBy=startTime`, `singleEvents=true`, `timeMin=now`, and `maxResults=1`.
+- **Microsoft Outlook/Graph**: Uses Microsoft Graph `calendarView` for the default or selected calendar, and parses Teams/meeting links from `onlineMeeting`, `onlineMeetingUrl`, locations, or event body preview.
+- **Multiple accounts**: Settings now store an array of accounts, and the plugin picks the earliest upcoming meeting across all enabled Google and Outlook accounts.
+- **Status display**: Colors and text states are defined in `src/plugin.js`. Update icons/text based on time-to-start and meeting status.
 
-### Configure OAuth for production
-Update these constants in `src/property-inspector.js`:
-- `VERCEL_OAUTH_BASE` to your backend domain (for example `https://your-project.vercel.app`)
-- `GOOGLE_CLIENT_ID` to your OAuth client ID
-
-### Packaging
-Use the Elgato CLI to create the `.streamDeckPlugin` file:
-```
-npx @elgato/cli pack com.elgato.nextmeeting.sdPlugin -o . -f
-```
+### Feature mapping
+- Multi-provider, multi-account: settings store an array of providers/calendars.
+- Real-time countdown: plugin updates every 15s by default and renders `in Xm`, `now`, or `Xm left`.
+- One-click join: primary tap opens the meeting URL if available.
+- Smart visuals: background/titles change by status (free, upcoming, live, ending).
+- Dynamic emojis/logos: text badges use provider + meeting type emoji hints.
+- Secure OAuth: placeholders documented; no secrets stored in code.
+- Performance: debounced renders and caching hooks ready for API responses.
 
 ### Repository structure
 ```
@@ -42,7 +46,7 @@ src/
   property-inspector.js
 ```
 
-### Notes
-- This repo targets Google Calendar only.
-- Client secrets are not stored in the plugin; they belong in the separate backend project.
-- This repo is intended to stay plugin-only. Keep OAuth callback/refresh endpoints in a separate repository.
+### Next steps
+- Add a proper build/release step so `src/` and `com.elgato.nextmeeting.sdPlugin/` are generated from one source of truth.
+- Improve account management with provider-specific calendar pickers instead of manual IDs.
+- Add richer provider-specific iconography and meeting source badges.
