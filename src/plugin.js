@@ -4,7 +4,7 @@
   const UPDATE_INTERVAL_MS = 10000;
   const SOON_THRESHOLD_MIN = 15;
   const NOW_THRESHOLD_MIN = 1;
-  const VERCEL_OAUTH_BASE = 'https://next-meeting.yaik.us';
+  const VERCEL_OAUTH_BASE = 'https://your-project.vercel.app';
 
   let websocket = null;
   let pluginUUID = null;
@@ -109,7 +109,7 @@
     const { settings } = instance;
     if (settings.googleTokens && settings.googleTokens.access_token) {
       if (tokenExpired(settings.googleTokens)) {
-        const refreshed = await refreshIfPossible(instance);
+        const refreshed = await refreshOrDefer(instance);
         if (!refreshed) return handleExpiredToken(instance);
       }
       try {
@@ -126,7 +126,7 @@
         if (meeting) return meeting;
       } catch (err) {
         if (err?.message === 'unauthorized') {
-          const refreshed = await refreshIfPossible(instance);
+          const refreshed = await refreshOrDefer(instance);
           if (refreshed) {
             const meeting = await fetchGoogleNext(instance, refreshed);
             if (meeting) return meeting;
@@ -146,7 +146,7 @@
   }
 
   async function refreshGoogleToken(tokens) {
-    if (!VERCEL_OAUTH_BASE) throw new Error('no-refresh-endpoint');
+    if (!hasConfiguredOauthBase()) throw new Error('oauth_not_configured');
     const res = await fetch(`${VERCEL_OAUTH_BASE}/api/google/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -154,15 +154,13 @@
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`refresh_failed_${res.status}:${text}`);
+      const err = new Error(`refresh_failed_${res.status}:${text}`);
+      err.status = res.status;
+      err.code = shouldReconnect(res.status, text) ? 'reauth_required' : 'refresh_failed';
+      throw err;
     }
     const data = await res.json();
-    return {
-      ...tokens,
-      access_token: data.access_token,
-      expires_at: data.expires_at,
-      scope: data.scope || tokens.scope
-    };
+    return mergeGoogleTokens(tokens, data);
   }
 
   async function fetchGoogleNext(instance, tokens) {
@@ -197,8 +195,19 @@
       instance.settings.googleTokens = updated;
       saveSettings(instance.context, { ...settings, googleTokens: updated });
       return updated;
+    } catch (err) {
+      if (err?.code === 'reauth_required' || err?.message === 'oauth_not_configured') {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  async function refreshOrDefer(instance) {
+    try {
+      return await refreshIfPossible(instance);
     } catch (_) {
-      return null;
+      throw new Error('connection');
     }
   }
 
@@ -222,6 +231,32 @@
     if (!tokens || !tokens.expires_at) return false;
     const now = Math.floor(Date.now() / 1000);
     return tokens.expires_at < now + 30;
+  }
+
+  function hasConfiguredOauthBase() {
+    return Boolean(VERCEL_OAUTH_BASE) && !VERCEL_OAUTH_BASE.includes('your-project.vercel.app');
+  }
+
+  function mergeGoogleTokens(previousTokens, nextTokens) {
+    const now = Math.floor(Date.now() / 1000);
+    return {
+      ...previousTokens,
+      ...nextTokens,
+      refresh_token: nextTokens.refresh_token || previousTokens.refresh_token,
+      scope: nextTokens.scope || previousTokens.scope,
+      email: nextTokens.email || previousTokens.email,
+      expires_at: nextTokens.expires_at || (nextTokens.expires_in ? now + nextTokens.expires_in : previousTokens.expires_at)
+    };
+  }
+
+  function shouldReconnect(status, body) {
+    const text = `${body || ''}`.toLowerCase();
+    return status === 400 && (
+      text.includes('invalid_grant') ||
+      text.includes('invalid_request') ||
+      text.includes('token has been expired or revoked') ||
+      text.includes('malformed')
+    );
   }
 
   function handleExpiredToken(instance) {

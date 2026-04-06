@@ -1,6 +1,6 @@
-## Stream Deck Next Meeting Plugin
+## Stream Deck Next Meeting Plugin Template
 
-Shows your next Google Calendar event and lets you join with one press. Uses OAuth PKCE with a Vercel companion backend for token exchange and refresh.
+Shows your next Google Calendar event and lets you join with one press. Uses OAuth PKCE with a separate backend for token exchange and refresh.
 
 ### What’s included
 - Stream Deck plugin manifest with one `next.meeting` action.
@@ -15,13 +15,13 @@ Shows your next Google Calendar event and lets you join with one press. Uses OAu
 - Shows a red "Reconnect / Auth expired" state when OAuth tokens are invalid.
 
 ### OAuth flow
-This plugin uses a Vercel backend (see repo `nextMeeting`) to exchange the auth code and refresh tokens:
+This plugin expects a separate OAuth backend to exchange the auth code and refresh tokens:
 - `/api/google/callback` exchanges the code for tokens.
 - `/api/google/refresh` refreshes access tokens using the `refresh_token`.
 
 ### Configure OAuth for production
 Update these constants in `src/property-inspector.js`:
-- `VERCEL_OAUTH_BASE` to your Vercel domain (e.g. `https://next-meeting.yaik.us`)
+- `VERCEL_OAUTH_BASE` to your backend domain (for example `https://your-project.vercel.app`)
 - `GOOGLE_CLIENT_ID` to your OAuth client ID
 
 ### Packaging
@@ -44,4 +44,5 @@ src/
 
 ### Notes
 - This repo targets Google Calendar only.
-- Client secrets are not stored in the plugin; they live in Vercel env vars.
+- Client secrets are not stored in the plugin; they belong in the separate backend project.
+- This repo is intended to stay plugin-only. Keep OAuth callback/refresh endpoints in a separate repository.

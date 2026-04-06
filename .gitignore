@@ -2,4 +2,5 @@ client_secret*.json
 .env
 *.log
 oauth_tokens.json
+oauth/oauth_tokens.json
 node_modules

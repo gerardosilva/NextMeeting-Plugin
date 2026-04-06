@@ -5,8 +5,8 @@
   let actionInfo = null;
   let settings = {};
   let tokenPoll = null;
-  const VERCEL_OAUTH_BASE = 'https://next-meeting.yaik.us';
-  const GOOGLE_CLIENT_ID = '1015315014566-ib4don836rrnucc7i2qjg9nbddh65ejg.apps.googleusercontent.com';
+  const VERCEL_OAUTH_BASE = 'https://your-project.vercel.app';
+  const GOOGLE_CLIENT_ID = 'your-google-client-id.apps.googleusercontent.com';
 
   function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo) {
     uuid = inUUID;
@@ -69,6 +69,10 @@
 
   function renderAuthStatus() {
     const status = document.getElementById('auth-status');
+    if (!hasConfiguredOAuth()) {
+      status.textContent = 'OAuth template not configured yet';
+      return;
+    }
     if (settings.googleTokens && settings.googleTokens.access_token) {
       const email = settings.googleTokens.email;
       const label = email ? `Connected: Google Calendar (${email})` : 'Connected: Google Calendar';
@@ -79,6 +83,10 @@
   }
 
   function startGoogleAuth() {
+    if (!hasConfiguredOAuth()) {
+      renderAuthStatus();
+      return;
+    }
     if (VERCEL_OAUTH_BASE) {
       startGoogleAuthVercel();
       return;
@@ -106,10 +114,16 @@
 
   function startGoogleAuthVercel() {
     const clientId = GOOGLE_CLIENT_ID;
+    const existingRefreshToken = settings.googleTokens?.refresh_token || null;
+    const existingEmail = settings.googleTokens?.email || null;
     const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
     sha256(verifier).then((hash) => {
       const challenge = base64Url(hash);
-      const state = base64Url(JSON.stringify({ verifier }));
+      const state = base64Url(JSON.stringify({
+        verifier,
+        refreshToken: existingRefreshToken,
+        email: existingEmail
+      }));
       const redirectUri = `${VERCEL_OAUTH_BASE}/api/google/callback`;
       const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       authUrl.searchParams.set('client_id', clientId);
@@ -117,12 +131,15 @@
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('scope', 'https://www.googleapis.com/auth/calendar.readonly openid email profile');
       authUrl.searchParams.set('access_type', 'offline');
-      authUrl.searchParams.set('prompt', 'consent');
+      if (!existingRefreshToken) {
+        authUrl.searchParams.set('prompt', 'consent');
+      }
       authUrl.searchParams.set('code_challenge', challenge);
       authUrl.searchParams.set('code_challenge_method', 'S256');
       authUrl.searchParams.set('state', state);
       const popup = window.open(authUrl.toString(), '_blank');
       const handler = (event) => {
+        if (event.origin !== VERCEL_OAUTH_BASE) return;
         if (!event.data || event.data.type !== 'googleTokens') return;
         const data = event.data.data;
         settings.googleTokens = data;
@@ -133,6 +150,15 @@
       };
       window.addEventListener('message', handler);
     });
+  }
+
+  function hasConfiguredOAuth() {
+    return (
+      Boolean(VERCEL_OAUTH_BASE) &&
+      Boolean(GOOGLE_CLIENT_ID) &&
+      !VERCEL_OAUTH_BASE.includes('your-project.vercel.app') &&
+      !GOOGLE_CLIENT_ID.includes('your-google-client-id')
+    );
   }
 
   function base64Url(buffer) {
